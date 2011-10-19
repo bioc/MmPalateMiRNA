@@ -1,0 +1,11 @@
+
+importClassesFrom(limma, MAList)
+importClassesFrom(Biobase, NChannelSet)
+importFrom(lattice, densityplot, levelplot, xyplot, panel.xyplot, panel.loess)
+exportMethods(densityplot, levelplot, checkOutliers, checkMVs, filterArray,
+              MADvsMedianPlot, MAplot)
+export(imputeKNN, fixOutliers, fixMVs, clustPlot)
+
+
+
+            

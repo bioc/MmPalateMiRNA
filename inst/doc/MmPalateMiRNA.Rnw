@@ -1,0 +1,1384 @@
+
+%% NOTE: Long entry for Depends!! 
+
+% \VignetteIndexEntry{Palate miRNA Analysis}
+% \VignetteDepends{GOstats, graph, Category, org.Mm.eg.db, microRNA,
+% targetscan.Mm.eg.db, RSQLite, DBI, AnnotationDbi, clValid, class,
+% cluster, multtest, statmod, xtable, vsn, latticeExtra, lattice,
+% RColorBrewer, Biobase, limma}
+% \VignetteKeywords{miRNA, two-color, differential expression, visualization,
+% clustering, normalization, miRNA target analysis, gene-set enrichment}
+% \VignettePackage{MmPalateMiRNA}
+
+
+\SweaveOpts{engine=R,eps=FALSE,echo=TRUE} %% , eval=FALSE}
+%% \SweaveOpts{keep.source=TRUE} %% in case want to keep manual formatting
+
+\documentclass[11pt]{article}
+
+\setlength{\oddsidemargin}{0.25truein}
+\setlength{\evensidemargin}{0.25truein}
+\setlength{\textwidth}{6.0truein} \setlength{\topmargin}{0.25truein}
+\setlength{\textheight}{8.5truein} \setlength{\headsep}{0.0truein}
+\setlength{\headheight}{0.0truein} \setlength{\topskip}{10.0pt}
+%\pagestyle{empty} 
+\baselineskip=0.6cm
+
+\usepackage{amsmath,amssymb,amsfonts} % Typical maths resource packages
+\usepackage{graphics}                 % Packages to allow inclusion of graphics
+\usepackage{color}                    % For creating coloured text and background
+\usepackage{hyperref}                 % For creating hyperlinks in cross references
+\usepackage{relsize}
+\usepackage[mathcal]{euscript}
+%% \usepackage[round]{natbib}
+\usepackage{gbMacros}
+\usepackage{Sweave}
+
+
+\begin{document}
+
+\setkeys{Gin}{width=0.8\textwidth} 
+
+%% for figure sizes, note 0.8\textwidth is default 
+%% another option is to use 'nogin' in the [] after documentclass,
+%% then explicitly set width and height in << ... >> statement 
+
+\title{Analysis of Murine Palate Two-Color miRNA Microarray Data}
+
+
+\author{Guy N.~Brock$^1$, Partha Mukhopadhyay$^2$, Vasyl Pihur$^1$, \\
+  Cynthia Webb$^2$,  Robert M.~Greene$^2$, and M.~Michele Pisano$^2$
+  \\ \\
+$^1$Department of Bioinformatics and Biostatistics \\
+$^2$Department of Molecular Cellular and Craniofacial Biology \\
+University of Louisville \\ \\}
+
+%% \url{http://louisville.edu/~g0broc01/} \\ \\ 
+%Note: A previous version of this manuscript was published in the \\
+%\emph{Journal of Statistical Software} \citep{Bro2008}.}
+
+\maketitle
+
+\tableofcontents
+
+
+\newpage 
+ 
+\begin{abstract}
+  
+  This vignette presents an analysis of a typical two-color miRNA
+  microarray experiment.  Covered topics
+  include visualization, normalization, quality checking, differential
+  expression, cluster analysis, miRNA target identification, and
+  gene set enrichment analysis.  Many of these tools carry-over from
+  the analysis of mRNA microarrays, but with some notable differences
+  that require special attention.  
+
+\end{abstract}
+
+ 
+
+\section{Introduction}
+\label{sec:Introduction}
+
+<<Roptions, echo=FALSE, eval=TRUE>>=
+options(prompt="R> ", width=70, continue=" ")
+## usually, width=60 ... 
+@ 
+
+
+In this vignette, we present the analysis of a two-color miRNA
+microarray experiment.  
+%% NOTE - need to definte package?? 
+The \pkg{MmPalateMiRNA} package is a compendium \cite{Gen2005, Rus2004},
+which encapsulates the primary data, supporting software and
+statistical analysis, and document text.
+The data were obtained from mouse embryos
+during the development of the secondary palate \cite{Muk2010}, 
+and are freely available as part of the
+compendium package. 
+The analysis presented here follows closely to what was presented 
+in \cite{Muk2010}, though with a few differences.  
+Although the analysis is specific to the Miltenyi Biotech miRXplore
+platform 
+\footnote{Miltenyi Biotec: products \& services for biomedical
+research, \url{http://www.miltenyibiotec.com/en/default.aspx}}, 
+the general steps outlined here can easily
+be extended to other platforms as well. \\
+
+Example code is provided for
+the complete analysis including preprocessing of arrays,
+normalization, identification
+of differentially expressed miRNAs, clustering, miRNA target
+identification, and gene-set enrichment analysis.
+Aspects of miRNA analysis which require
+special attention are highlighted.
+In particular, miRNA arrays typically have far fewer genes that are
+spotted on the array compared 
+to  mRNA arrays, and require careful
+consideration of the assumptions behind array pre-processing methods
+prior to their application.
+Several recent publications have compared various normalization
+methods for microRNA microarray data \cite{Hua2008, Rao2008, Pra2009}, while
+others have developed novel methods specifically for miRNA data
+\cite{Ris2009, Wang2010, Sark2009, Barg2010}.  Though certain methods
+were found to outperform others in
+each case, in general there is still no consensus on the best
+normalization method.  In this vignette we illustrate how  to
+assess whether a normalization method is appropriate for a given
+data set, using the diagnostic plots discussed in \cite{Sark2009}.
+A second unique aspect of miRNA analysis relative to
+mRNA analysis is that differentially expressed miRNAs are subsequently
+evaluated for potential gene targets that are regulated by the
+miRNAs.  A number of databases can be used for this purpopse, and many
+of these have been ported to R in the form of Bioconductor packages.
+It is these putative regulatory targets that are typically evaluated
+for biological and molecular functionality, e.g.~by gene set
+enrichment analysis.  
+
+
+
+\section{miRNA Palate Data}
+\label{sec:Data}
+%% Murine Embyronic Orofacial Palate Development
+
+The microRNA microarray data in this compendium were obtained as
+previously described in \cite{Muk2010}, and the data are publicly available
+from GEO DataSets
+\footnote{GEO DataSets home, \url{http://www.ncbi.nlm.nih.gov/gds/}}, 
+(accession number GPL10179).  Briefly, mouse
+embryonic tissue was 
+obtained on gestational days (GD) 12, 13, and 14, which represents the
+critical period of palate development in the mouse.  Total RNA
+(containing miRNAs) was isolated using standard RNA extraction
+protocols.  RNA samples (1 $\mu$g) isolated from mouse embryonic orofacial
+tissues (GD-12 - GD-14) as well as the miRXplore Universal Reference
+(control) were fluorescently labeled with Hy5 (red) or Hy3 (green),
+respectively, and hybridized to miRXplore Microarrays (Miltenyi
+Biotec) using the a-Hyb Hybridization Station (Miltenyi Biotec). 
+For each gestational day, three distinct pools of RNA were
+independently processed and applied to microarray chips. Probes for a
+total of 1336 mature miRNAs (from human, mouse, rat and virus),
+including positive control and calibration probes, were spotted in
+quadruplicate on each microarray. Each array included probes for 588
+murine miRNAs.  The miRXplore Universal Reference (UR) controls,
+provided by Miltenyi, represent a defined pool of synthetic miRNAs for
+comparison of multiple samples.  Fluorescence signals of the
+hybridized miRXplore Microarrays were detected using a laser scanner
+from Agilent Technologies.  Mean and median signal and local
+background intensities for the Hy3 and Hy5 channels were obtained for
+each probe on each of the nine microarray images using the ImaGene
+software (BioDiscovery, Inc., El Segundo, CA). \\
+
+The raw data are available in the package as \ro{PalateData}, and are
+loaded below.  Additional meta-information concerning the type of
+probe (\ro{probe.type}) and name of the miRNA (\ro{Name} and
+\ro{Name.stem}) are available in the \ro{PalateData\$genes} data
+frame.  See the help page for details.  The data are in the format of
+an \ro{RGList}, and requires the \pkg{limma} package. 
+
+<<LoadPackageData>>=
+library("MmPalateMiRNA")
+data(PalateData)
+@ 
+
+
+\section{Preprocessing}
+\label{sec:Preprocessing} 
+
+\subsection{Outlying Arrays}
+
+Sarkar \emph{et al.}~\cite{Sark2009} describe several diagnostic plots for
+miRNA data that can be used to evaluate the need and effectiveness of
+normalization procedures.  These plots can also serve  as aids to
+determine outlying arrays and batch effects.  One such plot is the
+kernel density estimate for each array, for different types of
+probes.  
+Figure \ref{fig:DensityPlotsControlChannel} plots the
+density estimates of the $\log_2$ intensity values in the control channel for the
+unnormalized data, separated into ``MMU miRNAs'', ``Other miRNAs'',  and
+``Control'' probes (other probes were non-informative).  The plot
+requires use of the \pkg{lattice} package, and the \pkg{MmPalateMiRNA}
+package contains methods to produce plots for \ro{RGList}
+objects based on the generic functions in \pkg{lattice}.  
+
+%The \pkg{MmPalateMiRNA} package contains a method to produce density
+%plots for \ro{RGList} objects, based on the \ro{densityplot} generic
+%from the \pkg{lattice} package.
+
+
+<<DensityPlotsControlChannel, fig=TRUE, include=FALSE, echo=TRUE>>=
+
+####################################################################
+## Densities of log2 intensities in reference (green) channel
+## organize according to different types of probes
+## different lines correspond to different arrays 
+####################################################################
+
+## separate into mouse, non-mouse, blank, control probes
+## panels = probe type AND normalization type
+## groups = arrays
+## y = density
+## x = log2 values
+
+## Use ~ x1 + x2 | y fomula for multiple x's .. 
+## Done within the S4 method for class 'RGList' for densityplot
+## Code so that each day is different color, but each replicate is different line type
+
+#library("lattice")
+
+res <- densityplot(PalateData, channel="G", group="probe.type", 
+                   subset = c("Other miRNAs",   "MMU miRNAs", "Control"), 
+                   col=rep(1:3, each=3), lty=rep(1:3, 3), 
+                   key = list(lines=list(col=rep(1:3, each=3), lty=rep(1:3, 3)), 
+                     text=list(colnames(PalateData)), columns=3))
+print(res)
+
+## looks like 3 outlying arrays (021, 033, 029)
+## 12-1, 14-3, 13-2 ... 
+## 12-1, 12-2, 12-3, 13-1, 13-2, 13-3, 14-1, 14-2, 14-3
+## 021,  022,  023,  024,  033,  034,  035,  036,  029
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-DensityPlotsControlChannel}
+  \caption{Estimated density of reference channel in
+    unnormalized data, for various types of probes.}
+  \label{fig:DensityPlotsControlChannel}
+\end{figure}
+
+
+
+<<RedoFigure1OmitOutliers, echo=FALSE, eval=FALSE>>=
+## Redo, omiting 021, 033, and 029 (keep two replicates for each day)
+res <- densityplot(PalateData[, -c(1, 5, 9)], channel="G", group="probe.type", 
+                   subset = c("Other miRNAs",   "MMU miRNAs", "Control"), 
+                   col=rep(1:3, each=2), lty=rep(1:3, 2), 
+                   key = list(lines=list(col=rep(1:3, each=2), lty=rep(1:3, 2)), 
+                     text=list(colnames(PalateData[, -c(1, 5, 9)])), columns=3))
+plot(res)
+
+@ 
+
+
+Figure \ref{fig:DensityPlotsControlChannel} indicates three possible
+outlying arrays, GD 12-1, 13-2, and 14-3.  A second figure (Figure
+\ref{fig:DistancePlotControlChannel}) can be constructed based on the pairwise
+``distance'' between arrays,  as measured by the median of the absolute 
+differences in $\log_2$ expression for miRNAs in the green channel
+\cite{Sark2009}.  The plot is created using the \rf{levelplot} method
+for \ro{RGList} objects included in the package.  
+Here we separate the plots according to the type of
+probe, and the arrays are reordered so that the outlying arrays are
+grouped together. The three arrays are clearly outliers based on the
+control probes, but to a lesser extent based on the other types of
+probes. 
+
+
+<<DistancePlotControlChannel, fig=TRUE, include=FALSE, eval=TRUE, echo=TRUE>>=
+####################################################################
+## Sarkar Supplementary Figure S2 
+## Plot of pairwise "distance" between arrays
+## distance defined as median absolute difference between arrays for MMU miRNAs 
+## use log2 of green channel
+####################################################################
+
+## levelplot using S4 method for class 'RGList'
+## reorder so that outlying arrays are grouped together 
+res <- levelplot(PalateData[, c(1,5,9,2:4,6:8)], 
+                 channel="G", group="probe.type", 
+                 subset=c("MMU miRNAs", "Other miRNAs", "Control", "Empty"), 
+                 scales = list(rot=c(45, 45))) 
+print(res)
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-DistancePlotControlChannel}
+  \caption{Distance between arrays, as measured by the median absolute
+    distance of reference channel intensity measurements, separate by
+    type of probe.}
+  \label{fig:DistancePlotControlChannel}
+\end{figure}
+
+
+Figures \ref{fig:DensityPlotsControlChannel} and
+\ref{fig:DistancePlotControlChannel} demonstrate the 
+potential need for normalization or removal of several of the arrays.
+In Section \ref{sec:normalization}, we will evaluate the
+effectiveness of several normalization methods in correcting these
+systematic differences between the arrays.  
+
+
+\subsection{Outlying Values}
+\label{subsubsec:outliers}
+
+In addition to checking for outlying arrays, it is important to check
+for outlying values on individual probes. 
+To accomplish this,
+we evlauted for each probe whether there were any extreme values
+(greater than 2.665 standard deviations above the mean).  The
+\rf{checkOutliers} function 
+checks this for each of the red and green channels in an \ro{RGList}
+object, and returns the indices of array probes with extreme values.
+
+<<OutlierAssessment>>=
+outliers <- checkOutliers(PalateData)
+@ 
+
+The probes with outlying arrays can be visualized using boxplots,
+e.g.~using the code below.  
+
+<<BoxplotOutliers, eval=FALSE, echo=TRUE, keep.soure=TRUE>>=
+boxplot(as.data.frame(t(PalateData$R[outliers$Rout,])))
+@ 
+
+The figure is omitted but clearly shows
+that the identified outlying values are nearly two orders of magnitude
+above the rest of the intensity values. Rather than omitting these
+values, we exploit the replicated design of the arrays and substitute
+the mean of the other replicates on the array for the extreme values (the
+\rf{fixOutliers} function). 
+
+
+<<FixOutliers, echo=TRUE>>=
+
+## undebug(fixOutliers)
+PalateData$R <- fixOutliers(PalateData$R, outliers$Rout, PalateData$genes$Gene)
+PalateData$G <- fixOutliers(PalateData$G, outliers$Gout, PalateData$genes$Gene)
+
+@ 
+
+
+\subsection{Missing Values}
+\label{subsubsec:MVs}
+
+In addition to checking for outlying values, we also check for any
+missing values in the two channels (the \rf{checkMVs} function).
+Here, we only find two probes 
+on the array with missing values in the background channels, so we
+again impute these values using the means of the backgrounds from the
+other three replicates on the chip (the \rf{fixMVs} function).  
+
+<<CheckAndFixMissingValues, echo=TRUE>>=
+
+mvs <- checkMVs(PalateData)
+PalateData$Rb <- fixMVs(PalateData$Rb, mvs$Rb.na, PalateData$genes$Gene)
+PalateData$Gb <- fixMVs(PalateData$Gb, mvs$Gb.na, PalateData$genes$Gene)
+## Two genes with one missing background each ... 
+## missing in: 40139 39875
+## missing in: 40139 39875
+
+@ 
+
+
+
+\subsection{Filtering Probes}
+\label{subsec:filtering}
+
+Prior to running the normalization methods, we filter the probes and
+keep only those which correspond to miRNAs and calibration probes.  
+Additionally, probes that are not sufficiently above the background
+intensity level may be unreliable and  represent noise that can
+interfere with subsequent analysis, including normalization \cite{Sark2009}.
+Prefiltering also reduces the number of statistical
+comparisons being performed and improves overall power
+\cite{genefilter}.  
+Here, we filter probes whose foreground intensity values are below
+1.1 times their background intensity level.  To allow for probes which
+may be expressed for a particular experimental condition (here,
+gestational day), we keep all probes which have at least 3 samples
+above the filtering threshold.  Lastly, only those genes with all four
+replicates passing the filtering step are retained.  
+After all pre-processing steps, a total of 956
+probes, corresponding to 175 mouse miRNAs, 42 other miRNAs, and 22 calibration
+probes each replicated 4 times, remains. 
+
+%% NOTE: 
+%% Any reference for determining filtering threshold???
+
+%% From Sarkar 2009:
+%% Second, even among the measured microRNAs, only a small number are
+%% expressed at all in a given tissue, and consequently, most of the
+%% probes on the arrays cannot be used for normalization. 
+
+<<Filtering>>=
+reducedSet <- filterArray(PalateData, keep=c("MIR", "LET", "POSCON", "CALIB"),
+                          frac=1.1, number=3, reps=4) 
+
+@ 
+
+
+<<FilterCheck, eval=FALSE, echo=FALSE>>=
+## check
+dim(reducedSet)/4
+##  239.00   2.25
+## how many control probes left?
+length(grep("POSCON", reducedSet$genes$Name))
+## 16
+length(grep("CALI", reducedSet$genes$Name))
+## 72 
+@ 
+
+
+
+\section{Normalization}
+\label{sec:normalization}
+
+
+Based on the literature \cite{Hua2008, Rao2008, Pra2009, Sark2009}, we
+evaluated several normalization procedures on the filtered data,
+including none, median, loess, quantile, VSN, and 
+spike-in VSN. 
+The \pkg{limma} package includes various options for both within
+(\ro{normalizeWithinArrays}) and between (\ro{normalizeBetweenArrays})
+array normalization, and the \pkg{vsn} package has functions for
+performing VSN and spike-in VSN.    
+In all cases, a simple background correction was performed by
+subtracting background from the foreground intensities. \\
+
+
+%% NOTE - Can eliminate one of the VSN Methods 
+
+<<Normalization, echo=TRUE, results=hide>>=
+
+####################################################################
+## Evaluate different normalization procedures
+## 1. none
+## 2. median
+## 3. loess
+## 4. quantile 
+## 5. VSN
+## 6. spike-in VSN
+####################################################################
+
+## should just require this?? 
+library("vsn")
+## 1. None
+ndata.none <- normalizeWithinArrays(reducedSet, method="none")
+## 2. Median
+ndata.median <- normalizeWithinArrays(reducedSet, method="median")
+## 3. Loess
+ndata.loess <- normalizeWithinArrays(reducedSet, method="loess")
+## 4. Quantile
+ndata.quantile <- normalizeBetweenArrays(reducedSet, method="quantile")
+## 5. VSN 
+ndata.vsn.limma <- normalizeVSN(reducedSet)
+## NOTE: can also get the above with the following code:
+## ndata.vsn <- justvsn(reducedSet, backgroundsubtract=TRUE)
+## However, 'ndata.vsn' is an NChannelSet while 
+##   'ndata.vsn.limma' is an MAList 
+
+## 6. Spike-in VSN 
+idx.control <- which(reducedSet$genes$probe.type=="Control") 
+spikein.fit <- vsn2(reducedSet[idx.control,], lts.quantile=1, backgroundsubtract=TRUE)
+ndata.spikein.vsn <- predict(spikein.fit, newdata=reducedSet)
+
+@ 
+
+\subsection{Diagnostic Plots}
+
+
+Several diagnostic plots can be used to contrast the effectiveness of
+each normalization procedure, as suggested by \cite{Sark2009}.  
+The \pkg{MmPalateMiRNA} package contains several methods to
+produce these plots for lists of class \ro{MAList} or
+\ro{NChannelSet} objects, based on functions in the \pkg{lattice} package. 
+Figure \ref{fig:intensityPlots}, rows two through six, plots the
+intensity distribution for the reference channels after each of the
+normalization procedures (use of the \ro{useOuterStrips} function requires the
+\pkg{latticeExtra} package).  
+The quantile normalization procedure is clearly the most 
+successful in removing the intensity bias that was apparent for three
+of the arrays (12-1, 13-2, and 14-3), while loess and median
+normalization appear to be the least successful.  Notably,
+normalization based on the spike-in probes was 
+unsuccessful, perhaps since these probes were shifted differently in
+the reference channel relative to the other probe types. 
+
+%The \rf{normalizeWithinArrays} and
+%\rf{normalizeBetweenArrays} functions transform the normalized data to
+%M ($\log_2$ expression ratios of Hy5 versus Hy3) and A (mean $\log_2$ expression)
+%values, and the \ro{RG.MA} function is used to back-transform into the
+%original \ro{R} and \ro{G} intensity values (code not printed but
+%available in accompanying R script).  
+
+
+
+<<SarkarIntensityPlots, fig=TRUE, include=FALSE, echo=TRUE>>=
+####################################################################
+## 1. Evaluation using Sarkar density plots 
+##    Use RG.MA to convert back to RG values for MALists
+##    Use density plot - S4 method for class 'list'
+####################################################################
+
+ndata.all <- list(ndata.none, ndata.median, ndata.loess, 
+                  ndata.quantile, ndata.vsn.limma, 
+                  ndata.spikein.vsn)
+names(ndata.all) <- c("None", "Median", "Loess", "Quantile", "VSN", "Spike-in VSN")
+
+dplot <- densityplot(ndata.all, channel="G", group="probe.type", 
+                     subset = c("Other miRNAs",   "MMU miRNAs", "Control"),
+                     col=rep(1:3, each=3), lty=rep(1:3, 3),
+                     par.strip.text=list(cex=0.75), 
+                     key = list(lines=list(col=rep(1:3, each=3), lty=rep(1:3, 3)), 
+                       text=list(colnames(ndata.none)), columns=3))
+if (require("latticeExtra")) {
+  dplot <- useOuterStrips(dplot)
+}
+plot(dplot)
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-SarkarIntensityPlots}
+  \caption{Estimated density of reference channel before (``None'')
+    and  after normalization
+    by various normalization procedures, subsetted by type of probe.}
+  \label{fig:intensityPlots}
+\end{figure}
+
+An additional plot based on the median absolute difference
+between probes in the reference channel can be used to compare
+relative success of the normalization procedures in removing the array
+effect (Figure \ref{fig:distancePlots}).  
+Here again, quantile normalization appears to be the best,
+while loess and median normalization are the least effective.  
+
+
+<<SarkarDistPlots, fig=TRUE, include=FALSE, eval=TRUE, echo=TRUE>>=
+
+####################################################################
+## 2. Sarkar 'Distance' Plot
+##    Green channel, all probes 
+####################################################################
+
+## levelplot using S4 method for class 'list'
+res <- levelplot(ndata.all, channel="G", order=c(1,5,9,2:4,6:8), 
+                 scales = list(rot=c(45, 45))) 
+print(res)
+                 
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-SarkarDistPlots} 
+  \caption{Distance between arrays, as measured by the median absolute
+    distance of reference channel intensity measurements, after
+    application of several normalization procedures.}
+  \label{fig:distancePlots}
+\end{figure}
+
+
+To investigate the effect of the normalization procedure on the
+experimental channel, plots of the spread (median absolute deviation)
+versus the location (median) of all probes can be used.
+Plots of this type can be produced using the \ro{MADvsMedianPlot}
+function in the package. 
+Probes of different types are highlighted, with particular focus on
+the spike-in probes, which should have low variability across all the
+arrays.  In Figure \ref{fig:MADvsMedianPlots}, spike-in VSN 
+has the lowest variability among the spike-in probes, 
+compared to the other normalization methods.  
+However, spike-in VSN has also dramatically
+decreased the variation among \emph{all} the probes in the experimental
+channel, making the normalization procedure questionable in this case.
+Quantile normalization has resulted in large variations for some of the
+probes with lower intensity values.  
+
+ 
+<<MADvsMedianPlotsRed, echo=TRUE, fig=TRUE, include=FALSE>>=
+
+####################################################################
+## 3. Spread (MAD) vs. location (median) of all probes, highlight spike-ins
+##    Figure 4 in Sarkar ...
+####################################################################
+
+## Previously did MAD vs median of expression-ratios (M values) across all arrays
+## Now doing MAD vs median for RED channel ... 
+## Either plot may be interesting ... 
+
+## Now using S4 method MADvsMedianPlot ... 
+res <- MADvsMedianPlot(ndata.all, channel="R", group="probe.type",                  
+                 subset=c("MMU miRNAs", "Other miRNAs", "Control"))
+print(res)
+## Here, maybe quantile looks a little suspect??
+## VSN, quantile, and loess are close 
+## spike-in VSN very little variation and is suspect
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-MADvsMedianPlotsRed}
+  \caption{Spread, as measured by the median absolute deviation (MAD),
+    versus median expression for each probe in the experimental
+    channel after application of several normalization procedures.
+    Points are color-coded by type of probe.}
+  \label{fig:MADvsMedianPlots}
+\end{figure}
+
+
+<<MADvsMedianPlotsGreen, eval=FALSE, echo=FALSE>>=
+
+####################################################################
+## Repeat above for control channel 
+####################################################################
+
+res <- MADvsMedianPlot(ndata.all, channel="G", group="probe.type",
+                       subset=c("MMU miRNAs", "Other miRNAs", "Control"))
+print(res)
+
+
+@ 
+
+
+Plots of the $\log_2$ expression ratios (M values) versus the mean
+$\log_2$ expression values (A values) for each probe can be used to
+evaluate whether their is a bias associated with overall intenstity
+level for each array.  
+This so-called ``MA'' plot is illustrated in Figure
+\ref{fig:MA_quantile} for quantile normalization.  
+MA plots for the other normalization methods are not shown, though
+code to produce the plots is available in the R script for the
+vignette.  
+Quantile normalization has removed any
+association between the M and A values, while for VSN normalization
+there is still a trend which is similar to the unnormalized data
+The MA plot for spike-in VSN shows a dramatic effect on the intensity
+ratios. 
+
+%Code to produce the MA plot for quantile normalization is
+%shown below.  
+
+%% Need to separate into:
+%% a. quantile, b. VSN, c. none, d. spike-in VSN 
+
+<<MAplotsQuantile, echo=TRUE, fig=TRUE, include=FALSE>>=
+
+####################################################################
+## MA Plots for 
+## 1. quantile normalization
+## 2. VSN
+## 3. unnormalized data 
+## 4. spike-in VSN
+####################################################################
+
+## Quantile
+res <- MAplot(ndata.quantile)
+print(res)
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-MAplotsQuantile}
+  \caption{$\textnormal{Log}_2$ intensity ratios plotted against average $\log_2$
+    intensity values for each probe, for each array after quantile
+    normalization.  Red lines are loess smoothed regression lines for
+    each M versus A comparison.}
+  \label{fig:MA_quantile}
+\end{figure}
+
+
+<<MAplotsVSN, echo=FALSE, eval=FALSE>>=
+## VSN from limma
+res <- MAplot(ndata.vsn.limma)
+print(res)
+
+@ 
+
+
+<<MAplotsVSN2, echo=FALSE, eval=FALSE>>=
+## VSN (same as above)
+## sampleNames(ndata.vsn) <- paste(rep(12:14, each=3), rep(1:3, 3), sep="-")
+res <- MAplot(ndata.vsn)
+print(res)
+
+@ 
+
+
+
+<<MAplotsNone, echo=FALSE, eval=FALSE>>=
+## None
+res <- MAplot(ndata.none)
+print(res)
+
+@ 
+
+
+<<MAplotsSpikeInVSN, echo=FALSE, eval=FALSE>>=
+## spike-in VSN from limma
+res <- MAplot(ndata.spikein.vsn)
+print(res)
+
+@ 
+
+
+As a final evaluation, we inspection heatmaps along with 
+hierarchical clustering of the arrays.  Figure
+\ref{fig:heatmap.quantile} displays the heatmap after quantile
+normalization, and reveals that the previously identified outlying
+arrays (samples 12-1, 13-2, and 14-3) still do not cluster with the
+other replicates for that day.  
+
+<<HeatMaps, echo=TRUE, fig=TRUE, include=FALSE>>=
+
+####################################################################
+## Heatmaps
+####################################################################
+## Clusters both rows and columns
+heatmap(ndata.quantile$M, col=cm.colors(256), labRow=FALSE)
+
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-HeatMaps}
+  \caption{Heatmap of $\log_2$ intensity ratios after quantile
+    normalization.  Arrays and probes are clustered by hierarchical
+    clustering.  Arrays 12-1, 13-2, and 14-3 do not cluster with the
+    other replicates for the corresponding gestational day.}
+  \label{fig:heatmap.quantile}
+\end{figure}
+
+
+Table \ref{tab:correlations} gives the
+correlations between each pair of arrays, based on the $\log_2$ intensity ratios.  
+Since the other two replicates for each day were highly correlated  ($r
+> 0.95$), we decided to use only those two replicates from each day for
+subsequent statistical analysis. Normalization was redone omitting the
+arrays 12-1, 13-2, and 14-3, using quantile normalization.  
+ 
+<<Correlations, results=tex, eval=TRUE, echo=FALSE>>=
+library("xtable")
+xtable(round(cor(ndata.quantile$M, use="complete"), 3), 
+       caption = "Correlation between arrays after quantile normalization",  
+       label = "tab:correlations")
+
+@  
+
+
+<<RedoNormalization, echo=TRUE, results=hide>>=
+
+########################################################################
+## Redo, omiting 021, 033, and 029 (12-1, 13-2, 14-3)
+## keep two replicates for each day
+## Removal before normalization
+########################################################################
+
+## Need to take out "MIRCONTROL" samples now as well
+## NOTE: Keeping these in improves correlation between samples on same day
+##       Remove prior to calculating whether gene is expressed and DE
+
+####################################################################
+## 1. Quantile between, no within
+## 2. VSN
+####################################################################
+
+## Background correction = 'subtract' by default (all methods)
+omit <- which(colnames(reducedSet)%in%c("12-1", "13-2", "14-3"))
+ndata <- normalizeBetweenArrays(reducedSet[,-omit], method="quantile")
+@ 
+
+
+<<CorrelationsRedData, echo=FALSE, eval=FALSE>>=
+round(cor(ndata$M, use="complete"), 3)
+@ 
+
+
+<<HeatmapsRedData, echo=FALSE, eval=FALSE>>=
+heatmap(ndata$M, col=cm.colors(256))
+@ 
+
+
+
+\subsection{Imputation}
+\label{subsec:imputation}
+
+Sixteen probes from the six arrays exhibited
+negative intensities after the background procedure, and resulted in
+missing values for subsequent calculation of the $\log_2$ intensity ratios. 
+A significant percentage of missing values can have a substantial
+impact on downstream analysis of array data \cite{Oh2010}, and in such
+cases choice of a imputation procedure should be carefully
+considered.  Here, with a relatlively small percentage of missing
+values, the impact on data analysis will be relatively minimal, and we
+select the K-nearest neighbor imputation scheme \cite{Troy2001} as a
+fast and effective approach (the \rf{imputeKNN} function is included
+in the package). 
+
+
+<<MVCheck, echo=FALSE, eval=FALSE>>=
+sum(is.na(ndata$A)) # only 16
+sum(is.na(ndata$M)) # same 
+@ 
+
+
+<<ImputeMissingValues, echo=TRUE>>=
+ndata$M <- imputeKNN(as.matrix(ndata$M), dist="cor") 
+ndata$A <- imputeKNN(as.matrix(ndata$A), dist="cor")  
+@ 
+
+
+
+
+\section{Determining Differentially Expressed miRNAs}
+\label{subsec:diffexpress}
+
+To test for differential expression of miRNAs between different
+gestational days (GD-12, 13, and 14), the \pkg{limma} package
+\cite{Smy2004}  was used.  
+Use of the \pkg{limma} package requires the user to create a design
+matrix, which defines the possible levels for each experimental
+factor,  and is used to construct a model matrix and
+contrasts to test for differential expression between factor
+levels.  The model matrix consists of indicator variables for the
+levels of each experimental factor in our design, which in our case
+corresponds to each of the gestational days. 
+
+
+<<DesignMatrix>>=
+## Construct the design matrix
+design <- data.frame(grp=c(1,1,2,2,3,3),rep=c(1,2,1,2,1,2))
+design$grp <- factor(design$grp, labels=c("Day12", "Day13", "Day14"))
+mmat <- model.matrix( ~ 0 + design$grp)
+colnames(mmat) <- c("Day12", "Day13", "Day14")
+@ 
+
+The contrasts defined here estimate the differences in mean $\log_2$ expression
+between each gestational day.  The \ro{makeContrasts} function in
+\pkg{limma} will generate these for you.
+
+<<Contrasts>>=
+contrast.matrix <- makeContrasts(Day13-Day12, Day14-Day12, Day14-Day13,
+                                 levels=mmat)
+@ 
+
+
+Some advantages of using \pkg{limma} over other methods include
+the ability to incorporate probe quality weights and to 
+handle duplicate probes for each miRNA on the chip via the
+\rf{duplicateCorrelation} function.  These advantages are particularly
+evident in small sample sizes, as in this experiment. To make use of
+the duplicated probes, we first order the normalized data so that
+replicated probes are adjacent to each other.  The probe quality
+weights are incorporated in the calculation of the correlation matrix
+for the duplicated probes.  
+
+
+<<DuplicateProbes>>=
+
+## Order data by probes
+idx <- order(ndata$genes$Gene)
+ndata <- ndata[idx,]
+idx.rm <- which(ndata$genes$probe.type=="Control")
+ndata <- ndata[-idx.rm,]
+## compute correlations between same probes on each chip 
+corfit <- duplicateCorrelation(ndata, mmat, ndups=4, 
+                               weights=ndata$weights)
+
+@ 
+
+
+Next, the \rf{lmFit} function is used to fit the hierarchical linear
+model, and the \rf{contrasts.fit} function used to get contrast
+estimates. The \rf{eBayes} function generates the moderated (empirical
+Bayesian) $t$-statistics corresponding to each of the contrast
+estimates. 
+
+<<Estimates, keep.source=TRUE>>=
+fit <- lmFit(ndata, mmat, ndups=4, 
+               correlation=corfit$consensus)
+fitc <- contrasts.fit(fit, contrast.matrix)
+fitc <- eBayes(fitc)
+@ 
+
+
+
+%% ESTIMATES OF CONTRASTS (RESULTS)
+The \rf{topTable} function calculates and reports fold change,
+moderated $t$-statistics, unadjusted and adjusted $p$-values for the
+comparison of interest.  Code below shows the calculation for the
+comparison between gestational days 13 and 12, and the results are
+given in Table \ref{tab:contrast13v12}.  Results for comparisons between the other
+gestational days are omitted but code to calculate them is inclued in
+the R script for the vignette. 
+
+<<ContrastsEstimates, echo=TRUE, results=tex>>=
+## First contrast
+top13v12 <- topTable(fitc, coef=1, number=nrow(ndata)/4, adjust="fdr",
+                     sort.by="P") 
+top13v12$FC <- 2^(top13v12$logFC)
+
+sig13v12 <- top13v12[top13v12$adj.P.Val<.05,]
+colNames <- c("Name.stem", "probe.type", "FC", "t", "adj.P.Val")
+res <- xtable(sig13v12[,colNames],
+              digits=c(0,0,0,2,2,3), 
+              caption="Significantly differentially expressed miRNAs 
+                       for GD 13 versus 12",
+              label="tab:contrast13v12", caption.placement = "top")
+print(res, include.rownames=FALSE)
+@ 
+
+
+<<OtherContrasts, echo=FALSE >>=
+# second contrast
+top14v12 <- topTable(fitc, coef=2, number=nrow(ndata)/4, adjust="fdr")
+top14v12$FC <- 2^(top14v12$logFC)
+sig14v12 <- top14v12[top14v12$adj.P.Val<.05,]
+
+# third contrast
+top14v13 <- topTable(fitc, coef=3, number=nrow(ndata)/4, adjust="fdr")
+top14v13$FC <- 2^(top14v13$logFC)
+sig14v13 <- top14v13[top14v13$adj.P.Val<.05,]
+@ 
+
+
+A nice summary of the results for the comparisons between gestational
+days is a Venn diagram, which gives the number of up- and
+down-regulated genes for each comparison, along with the number in the
+intersection of these sets (Figure \ref{fig:venn.diagram}). 
+
+<<VennDiagram, echo=TRUE, eval=TRUE, fig=TRUE, include=FALSE>>=
+res <- decideTests(fitc)
+vennDiagram(res, include=c("up","down"), 
+            counts.col=c("red","green"), cex=1.25)
+@ 
+
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-VennDiagram}
+  \caption{Venn diagram illustrating the number of up- and
+    down-regulated genes for each comparison between gestational days,
+    along with the number in the intersection of these sets.}
+  \label{fig:venn.diagram}
+\end{figure}
+
+Although we have focused on the calculation of test statistics
+corresponding to pairwise comparisons between gestational days, it is
+easy to obtain estimates for other contrasts of interests between the
+experimental conditions.  
+For example, the the \ro{contr.poly} function will provide contrasts
+to test for linear and quadratic trends, and the \ro{contr.helmert}
+function gives the Helmert contrasts.  
+Additionally, the analysis of variance (ANOVA) $F$-statistics
+for testing for differential expression between all three gestational
+days are in \ro{fitc\$F}, with corresponding $p$-values in
+\ro{fitc\$F.p.value}.  \\ 
+
+
+To illustrate, we first calculate adjsuted $p$-values for the
+$F$-statistics  in \ro{fitc\$F}, using the \pkg{multtest} package. 
+
+<<Fstats, echo=TRUE, eval=TRUE>>=
+if (require("multtest")) {
+  rawp <- fitc$F.p.value
+  BH <-  mt.rawp2adjp(rawp, proc = "BH")
+  sum(BH$adjp[,"BH"] < 0.05)
+}
+@ 
+
+
+The same statistics can be obtained by combining two orthogonal
+contrasts, e.g.~using the \rf{contr.helmert} function. 
+
+
+<<FstatsHelmert, echo=TRUE, eval=TRUE>>=
+## Helmert contrasts, from contr.helmert ... 
+contr.helmert(3)
+contrast.helmert <- makeContrasts(Day13-Day12, Day14-0.5*Day12-0.5*Day13, 
+                                 levels=mmat)
+fitc.helmert <- contrasts.fit(fit, contrast.helmert)
+fitc.helmert <- eBayes(fitc.helmert)
+Fstats <- topTable(fitc.helmert, coef=c(1, 2), number=nrow(ndata)/4, adjust="fdr", 
+                   sort.by="F") 
+sum(Fstats$adj.P.Val < 0.05)
+@ 
+
+
+Next, the miRNAs with significant $F$-statistics (adjusted $p < 0.05$)
+are identified for follow-up examination, e.g.~by clustering.  The
+duplicates are averaged prior to further analysis. 
+
+<<AverageData, echo=TRUE>>=
+## average probes for plotting
+avedata <- avedups(ndata, ndups=4, spacing=1) 
+sigFgenes <- Fstats$Gene.ID[which(Fstats$adj.P.Val < 0.05)]
+## ssgenes <- unique(c(sig13v12$Gene, sig14v12$Gene, sig14v13$Gene))
+## sum(sigFgenes%in%ssgenes) ## all 79 show up in individual lists 
+mat <- as.matrix(avedata[match(sigFgenes, avedata$genes$Gene), ])
+colnames(mat) <- c("GD-12-1", "GD-12-2","GD-13-1", "GD-13-2",
+                   "GD-14-1", "GD-14-2")
+rownames(mat) <- sigFgenes
+@ 
+
+
+
+\section{Clustering Expression Profiles}
+\label{sec:clustering}
+
+
+After identifying the differentially expressed miRNAs, clustering
+analysis can be performed to group genes with similar trends over
+time.  A common difficultly is deciding which clustering algorithm to
+use, and how many clusters to create. Cluster validation measures, as
+contained in the R package \pkg{clValid} \cite{Bro2008}, can help in
+this regard.  Below, the \rf{clValid} function is used to evaluate
+hierarchical clustering, 
+SOTA, DIANA, and K-means clustering algorithms, for a range of
+one to six clusters in each case.  The expression values for each day
+are averaged over the two replicates prior to clustering (object
+\ro{aveExpr}).  The internal validation measures
+(connectivity, Dunn Index, and Silhouette Width) are used with a
+correlation metric.  A summary of the result indicates that
+hierarchical clustering with six clusters provides the optimal
+connectivity and Dunn Index measures, while DIANA with six clusters
+gives the optimal Silhouette Width.  
+
+
+<<Clustering>>=
+
+if (require("clValid")) {
+  ## This creates averages over replicates for each day
+  aveExpr <- t(apply(mat, 1, function(x) tapply(x, c(1,1,2,2,3,3), mean)))
+  clRes <- clValid(aveExpr, 6, clMethod=c("hierarchical", "diana", "sota","kmeans"),
+                   validation=c("internal"), metric="correlation")
+  summary(clRes)
+}
+
+@ 
+
+
+
+The results from hierarchical clustering with six clusters was
+subsequently selected for visually displaying the data, using the
+\rf{clustPlot} function available in this package.
+The expression values for each miRNA are scaled to mean zero and
+standard deviation one for ease of visualization.  
+The display is given in Figure \ref{fig:ClustPlot}.  The two
+predominant clusters are cluster one and cluster two, which correspond
+to those miRNAs which exhibit a linear upward and downward trend over
+the time course, respectively.  
+
+
+<<ClustPlot, fig=TRUE, include=FALSE, echo=TRUE>>=
+if (exists("clRes")) {
+  clusters <- cutree(clRes@clusterObjs$hierarchical, 6)
+  ## Scales the average expression values 
+  aveExpr <- t(scale(t(aveExpr)))
+  colnames(aveExpr) <- c("GD-12", "GD-13", "GD-14")
+  clustPlot(clusters, aveExpr, 3, 2)
+}
+@ 
+
+\begin{figure}
+  \centering
+  \includegraphics{MmPalateMiRNA-ClustPlot}
+  \caption{Plot of clustering results for all differentially expressed
+    miRNAs, based on hierarchical clustering with six clusters.}
+  \label{fig:ClustPlot}
+\end{figure}
+
+
+\section{Determining miRNA Target Genes}
+
+To follow-up the results from the differentially expression and
+clustering analysis, the next step is to determine putative regulatory
+targets of the differentially expressed miRNAs.  To illustrate, we
+identify the putative targets of the miRNAs contained in the first
+cluster in Figure \ref{fig:ClustPlot}.  
+The miRNAs in the first cluster are evaluated for putative
+targets using the databases TargetScan 
+\footnote{TargetScanHuman 5.1, \url{http://www.targetscan.org/}}
+(package \pkg{targetscan.Mm.eg.db}) 
+and miRBase 
+\footnote{MicroCosm Targets, 
+\url{http://www.ebi.ac.uk/enright-srv/microcosm/htdocs/targets/v5/}}
+(package \pkg{microRNA}).  The mouse specific miRNA names are first extracted, then 
+converted to the standard nomenclature:
+
+<<miRNAsClusterOne>>=
+  ## Pull out the MMU specific names
+if (exists("clusters")) {
+  ids1 <- names(clusters[which(clusters==1)])
+} else {
+  ids1 <- c("35816", "35861", "35886", "35817", "39256", "38722", "39370",
+            "38559", "40185", "35849", "35884", "40069", "39153", "39157", 
+            "39361", "39299", "35863", "39294", "38316", "39211", "40190", 
+            "38319", "38995", "35855", "38796", "35899", "39212", "38508", 
+            "39178", "35889", "38849", "39209")
+}
+ids1.names <- avedata$genes$Name[which(avedata$genes[,"Gene ID"]%in%ids1)]
+ids1.mmu.names <- lapply(strsplit(ids1.names, " "), function(x) grep("MMU", x, value=TRUE))
+ids1.mmu.names <- unlist(lapply(ids1.mmu.names, function(x) gsub("\\;", "", x)))
+
+## Convert to standard nomenclature ... 
+miRs1 <- tolower(ids1.mmu.names)
+miRs1 <- gsub("mir", "miR", miRs1) 
+
+
+@ 
+
+Targetscan targets are obtained using the code below.  The objects in
+the \pkg{targetscan.Mm.eg.db} package are \ro{Bimap} objects, which
+are mappings from one set of keys (the left keys or \ro{Lkeys})
+to another (the right keys or \ro{Rkeys}).  We start by mapping the
+miRBase identifiers to their miRNA family names, then map the miRNA
+families to Entrez Gene identifiers of the targets in the TargetScan
+database.  Several of the miRNAs of interest required slight
+modifications to their names prior to their mapping.  
+
+<<TargetScanTargets>>=
+
+if (require("targetscan.Mm.eg.db")) {
+
+  ## These are 'miRNAAnnDbBimap' - Bi-mappings
+  res01 <- miRs1%in%ls(targetscan.Mm.egMIRNA) ## only two false
+  miRs1[!res01] ## "mmu-miR-126" "mmu-let-7b*"
+  miRs1[!res01] <- c("mmu-miR-126-3p", "mmu-let-7b")
+  miRs1 <- unique(miRs1) ## have "mmu-let-7b" twice 
+
+  miRs1.list <- mget(miRs1, targetscan.Mm.egMIRNA)  
+  miRs1.fams <- mget(miRs1, targetscan.Mm.egMIRBASE2FAMILY)
+  miRs1.targets <- mget(as.character(miRs1.fams), revmap(targetscan.Mm.egTARGETS))
+  targets.tscan <- unique(unlist(miRs1.targets))
+  length(targets.tscan)  
+  ## Now only have 3814
+}
+
+@ 
+
+
+Mouse miRNA targets in the miRBase database are in the data frame
+\ro{mmTargets} within the \pkg{microRNA} package, and can be obtained
+using the code below.  The targets are stored as Ensembl gene identifiers.
+
+
+<<miRNATargets>>=
+
+####################################################################
+## microRNA package 
+####################################################################
+
+if (require("microRNA")) {
+  ## Try identifying targets for miRNAs in cluster one ... 
+  data(mmTargets)
+  targets.miRB <- mmTargets$target[which(mmTargets$name%in%miRs1)]
+  targets.miRB <- unique(targets.miRB)
+  length(targets.miRB) ## 13126, yikes!!! 
+  ## target ensembl IDs
+  
+  ## head(targets.miRB)  ## Ensembl IDs
+  ## head(targets.tscan) ## Entrez gene idenifiers
+  ## Convert to common naming for use with GSEA, use Entrez Gene IDs
+}
+
+@ 
+
+
+Lastly, we take the intersection of the targets from TargetScan and
+miRBase as our set of putative targets.  Ensembl gene identifiers are
+firstly converted to Entrez Gene identifiers using the
+\pkg{org.Mm.eg.db} Bioconductor package.  The final list contains 1,951
+Entrez Gene identifiers. 
+
+<<IntersectionOfTargets>>=
+
+if (require("org.Mm.eg.db")) {
+  ## org.Mm.egENSEMBLTRANS   Map Ensembl transcript acession numbers with
+  ##                         Entrez Gene identifiers
+  idx.miRB <- as.character(targets.miRB)%in%ls(revmap(org.Mm.egENSEMBLTRANS))
+  targets.miRB.list <- as.character(targets.miRB)[idx.miRB]
+  targets.miRB.entrez <- unlist(mget(targets.miRB.list, revmap(org.Mm.egENSEMBLTRANS)))
+  targets.intsect <- intersect(targets.tscan, targets.miRB.entrez)
+  length(targets.intsect)  ## Only 1951
+}
+
+@ 
+
+\section{Gene Set Analysis}
+
+As a final step in our analysis, we take the putative miRNA targets
+from the intersection of the TargetScan and miRBase databases and
+perform gene set enrichment analysis on them, using the hypergeometric
+test from the \pkg{GOstats} package \cite{GOstats}.  
+Terms in the GO hierarchy are analyzed for over-reprensetation
+of genes from our miRNA target list, relative to the total number from
+the mouse genome having that annotation.  A \ro{GOHyperGParams} object
+is created which contains the list of targets
+(\ro{selectedEntrezIds}), the gene ``universe'' (\ro{entrezUniverse}),
+the annotation database to use, the GO ontology, and direction and
+significance level of the test.  
+
+
+<<GSEAClustOne>>=
+
+## Steps:
+## 1. Define gene universe (a vector of Entrez Gene IDs).
+## 2. Select a list of interesting genes (a vector of Entrez Gene ID).
+## 3. Create a GOHyperGParams object.
+## 4. Outputs and summary.
+
+if (require("GOstats")) {  
+  selectedEntrezIds <- targets.intsect
+  ## Universe =  all entrez gene ids
+  entrezUniverse <- unlist(ls(org.Mm.egENSEMBLTRANS))
+
+  hgCutoff <- 0.001
+  GOparams <- new("GOHyperGParams", 
+                  geneIds=selectedEntrezIds, 
+                  universeGeneIds=entrezUniverse, 
+                  annotation="org.Mm.eg", ## may need to install org.Mm.eg.db ... 
+                  ontology="BP", 
+                  pvalueCutoff=0.001, 
+                  conditional=TRUE, 
+                  testDirection="over")
+}
+
+@ 
+
+
+After the \ro{GOHyperGParams} object has been created, the test can be
+conducted using the \rf{hyperGTest} function.  An html file
+summarizing the results can be created using the \ro{htmlReport}
+function (regeneration of the report is suppressed here due to time
+considerations). 
+Particular categories of interest include 
+GO:0060021 (palate development), 
+GO:0048008 (platelet-derived growth factor receptor signaling
+pathway), 
+GO:0060429 (epithelium development), 
+GO:0030855 (epithelial cell differentiation), 
+GO:0002070 (epithelial cell maturation), 
+GO:0030111 (regulation of Wnt receptor signaling pathway),  
+GO:0090263 (positive regulation of canonical Wnt receptor signaling pathway), 
+GO:0016055 (Wnt receptor signaling pathway),
+GO:0008277 (regulation of G-protein coupled receptor protein signaling pathway), 
+and  GO:0007179 (transforming growth factor beta receptor signaling pathway).  \\
+
+%% If want to try and include 'hgResult.html' ... 
+%% included here as \href{hgResult.html}{\Sexpr{normalizePath("hgResult.html")}}.
+%% see also - system.file, use list.files w/pattern and append an
+%% 'file:///' at the beginning ... see
+%% http://www.bioconductor.org/help/package-vignettes/ 
+
+<<GSEAReport, eval=FALSE, echo=TRUE>>=
+if (exists("GOparams")) {
+  hgOver <- hyperGTest(GOparams)
+  class(hgOver)
+  summary(hgOver)
+  ## HTML report of results
+  htmlReport(hgOver, file="hgResult.html")
+}
+@ 
+
+
+As a final step, we evaluate the mature miRNA sequences and seed
+regions of the miRNAs which target the genes in a particular GO
+category.  To illustrate, the GO category 0007179, transforming growth
+factor beta receptor signaling pathway, is used.  Entrez Gene
+IDs belonging to this category are identified, and intersected with
+the selected Entrez Gene IDs corresponding to cluster one of Figure
+\ref{fig:ClustPlot}.  
+
+
+<<BetaReceptorGenes, eval=TRUE, echo=TRUE>>=
+## Look at GO:0007179 (transforming growth factor beta receptor signaling pathway)
+## 1. Find genes
+if (require("org.Mm.eg.db")) {
+  egIdsAll <- get("GO:0007179", org.Mm.egGO2ALLEGS)
+  egIds <- intersect(egIdsAll, selectedEntrezIds) 
+  length(egIds) ## 15 
+  ## eliminates redundancies (genes w/multiple evidence codes) 
+}
+
+@ 
+
+Next, these Entrez Gene IDs are reverse mapped back to the set of
+miRNAs which putatively target these genes. 
+
+<<BetaReceptorTargetMiRNAs>>=
+if (require("targetscan.Mm.eg.db")) {
+  ## 2. Find miRNAs which target these genes
+  miRs.BetaR.TS <- mget(egIds, targetscan.Mm.egTARGETS)
+  miRs.BetaR.fams <- intersect(miRs1.fams, unlist(miRs.BetaR.TS))
+  miRs.BetaR.list <- mget(miRs.BetaR.fams, revmap(targetscan.Mm.egMIRBASE2FAMILY))
+  miRs.BetaR.mmu <- grep("mmu", unlist(miRs.BetaR.list), value=TRUE)
+  ## Now restrict these to just miRs of interest
+  miRs.BetaR.clust1 <- intersect(miRs1, miRs.BetaR.mmu)
+}
+
+@ 
+
+Lastly, the mature sequences and seed regions of these miRNAs are
+determined, using the \ro{mmSeqs} database and \rf{seedRegions}
+function in package \pkg{microRNA}. These sequences can be evaluated
+for any commonalities, to be used in determining potential targets for
+follow-up luciferase assays and other functional experiments
+\cite{Zha2010}. 
+In this case, the sequences are rather
+heterogeneous, although the seed region ``GAGGUA'' does show up in
+four of the fifteen identified miRNAs. 
+
+<<BRTargetMiRNASeqs>>=
+## 3. Now look at sequences and seed regions ... 
+if (require("microRNA")) {
+  data(mmSeqs)
+  idx.betaR <- which(names(mmSeqs)%in%miRs.BetaR.clust1)
+  mmSeqs[idx.betaR]
+  table(seedRegions(mmSeqs[idx.betaR]))
+}
+@ 
+
+
+
+
+\section{Session Info}
+
+<<SessionInfo>>=
+sessionInfo()
+@ 
+
+\section{List of abbreviations}
+
+\begin{description}
+  \item[DIANA:] Divisive Analysis
+  \item[GD:] Gestational Day
+  \item[GEO:] Gene Expression Omnibus
+  \item[GO:] Gene Ontology
+  \item[KEGG:] Kyoto Encyclopedia of Genes and Genomes
+  \item[miRNA:] microRNA
+  \item[PAM:] Partitioning Around Medoids  
+  \item[SAM:] Significant Analysis of Microarrays    
+  \item[SOM:] Self-Organizing Maps
+  \item[SOTA:] Self-Organizing Tree Algorithm 
+  \item[UR:] Universal Reference
+  \item[VSN:] Variance Stabilizing Normalization
+\end{description}
+    
+    
+{\small
+%%  \bibliographystyle{abbrvnat}
+  \bibliographystyle{unsrt}
+  \bibliography{miRNA_Refs}
+}
+
+
+
+
+
+\end{document}
+

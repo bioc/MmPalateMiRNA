@@ -1,0 +1,22 @@
+Package: MmPalateMiRNA
+Type: Package
+Title: Murine Palate miRNA Expression Analysis
+Version: 0.99.0
+Date: 2011-09-14
+Author: Guy Brock <guy.brock@louisville.edu>, 
+	Partha Mukhopadhyay <p0mukh01@louisville.edu>, 
+	Vasyl Pihur <vasyl.pihur@louisville.edu>, 
+	Robert M. Greene <Dr.Bob.Greene@gmail.com>, and 
+	M. Michele Pisano <mmpisa01@louisville.edu> 
+Maintainer: Guy Brock <guy.brock@louisville.edu>
+Depends: R (>= 2.13.0), methods, Biobase, xtable, limma, statmod, lattice, vsn 
+Imports: limma, lattice, Biobase 
+Suggests: GOstats, graph, Category, org.Mm.eg.db, microRNA,
+ targetscan.Mm.eg.db, RSQLite, DBI, AnnotationDbi, clValid, class,
+ cluster, multtest, RColorBrewer, latticeExtra
+Description: R package compendium for the analysis of murine palate miRNA two-color expression data.
+License: LGPL
+LazyLoad: yes
+biocViews: Microarray, TwoChannel, Bioinformatics, QualityControl, Preprocessing, DifferentialExpression, MultipleComparisons, Clustering, GO, Pathways, ReportWriting, SequenceMatching
+Collate: MmPalateMiRNA-Methods.R MmPalateMiRNA-functions.R
+Packaged: 2011-10-15 09:50:00 UTC; g0broc01
