@@ -5,7 +5,7 @@
 setGeneric("checkOutliers",
             function(obj) standardGeneric("checkOutliers"))
 
-setMethod("checkOutliers", signature(obj="RGList"), 
+setMethod("checkOutliers", signature(obj="RGList"),
           function(obj) {
 
             ## Detect outliers outside range of mean +/- two std deviations
@@ -20,14 +20,14 @@ setMethod("checkOutliers", signature(obj="RGList"),
             sdGb <- apply(obj$Gb, 1, sd)
             meRb <- rowMeans(obj$Rb)
             meGb <- rowMeans(obj$Gb)
-            
+
             ## RED CHANNEL
             Rout <- which(meR + 2.665*sdR < apply(obj$R, 1, max))
             Rbout <- which(meRb + 2.665*sdRb < apply(obj$Rb, 1, max))
             ## GREEN CHANNEL
             Gout <- which(meG + 2.665*sdG < apply(obj$G, 1, max))
             Gbout <- which(meGb + 2.665*sdGb < apply(obj$Gb, 1, max))
-            
+
             return(list(Rout=Rout, Rbout=Rbout, Gout=Gout, Gbout=Gbout))
           })
 
@@ -38,16 +38,16 @@ setMethod("checkOutliers", signature(obj="RGList"),
 setGeneric("checkMVs",
             function(obj) standardGeneric("checkMVs"))
 
-setMethod("checkMVs", signature(obj="RGList"), 
+setMethod("checkMVs", signature(obj="RGList"),
           function(obj) {
 
             R.na <- which(apply(obj$R, 1, function(y) any(is.na(y))))
             Rb.na <- which(apply(obj$Rb, 1, function(y) any(is.na(y))))
             G.na <- which(apply(obj$G, 1, function(y) any(is.na(y))))
             Gb.na <- which(apply(obj$Gb, 1, function(y) any(is.na(y))))
-            
+
             return(list(R.na=R.na, Rb.na=Rb.na, G.na=G.na, Gb.na=Gb.na))
-            
+
           })
 
 
@@ -63,18 +63,18 @@ setMethod("filterArray", signature(obj="RGList"),
 
             ## Keeping everything in toKeep
             ## 'valid' values have text in 'keep' AND
-            ## have fg levels > frac*bg in at least 'number' samples 
-            
+            ## have fg levels > frac*bg in at least 'number' samples
+
             ## 1. Text Filter
-            ## NOTE - need to document that text filter is based on 'genes$Name' ... 
+            ## NOTE - need to document that text filter is based on 'genes$Name' ...
             toKeep.txt <- unique(unlist(sapply(keep, function(x) grep(x, obj$genes$Name))))
 
             ## 2. Background Filter
             pass <- matrix(obj$R > frac*obj$Rb & obj$G > frac*obj$Gb, ncol=ncol(obj))
-            toKeep.bg <- which(rowSums(pass) >= number) 
+            toKeep.bg <- which(rowSums(pass) >= number)
 
             toKeep <- intersect(toKeep.txt, toKeep.bg)
-            reducedSet <- obj[toKeep,] 
+            reducedSet <- obj[toKeep,]
 
             ## Third filter step (keep only probes with at least 'reps' replicates)
             replicates <- table(reducedSet$genes$Gene)
@@ -93,7 +93,7 @@ setMethod("filterArray", signature(obj="RGList"),
 
 
 ####################################################################
-## densityplot 
+## densityplot
 ####################################################################
 
 setGeneric("densityplot", function(x, data, ...)
@@ -119,17 +119,17 @@ setMethod("densityplot", signature(x="RGList", data = "missing"),
             if (is.null(group)) {
               form <- as.formula(paste(" ~ `", paste(names(log2)[-ncol(log2)], collapse = "` + `"), "`", sep=""))
             } else {
-              form <- as.formula(paste(" ~ `", paste(names(log2)[-ncol(log2)], collapse = "` + `"),            
-                                       "` | ", "group", sep=""))              
+              form <- as.formula(paste(" ~ `", paste(names(log2)[-ncol(log2)], collapse = "` + `"),
+                                       "` | ", "group", sep=""))
             }
-            
+
             xlabtext <- ifelse(channel == "G",
                                "log2 Expression of Green (Control) Channel",
                                "log2 Expression of Red (Experimental) Channel")
 
             densityplot(form,
-                        data=log2, 
-                        plot.points=FALSE, 
+                        data=log2,
+                        plot.points=FALSE,
                         allow.multiple=TRUE,
                         ylab = "Estimated Density",
                         xlab = xlabtext, ... )
@@ -154,23 +154,23 @@ setMethod("densityplot", signature(x="list", data = "missing"),
             idx2 <- which(classes=="NChannelSet")
             res <- vector("list", length(x))
             res[idx1] <- lapply(x[idx1], function(x) log2(RG.MA(x)[[channel]]))
-            res[idx2] <- lapply(x[idx2], function(x) assayData(x)[[channel]])  
+            res[idx2] <- lapply(x[idx2], function(x) assayData(x)[[channel]])
             ## assayData() already stored as log2 values
             nlog2 <- as.data.frame(do.call(rbind, res))
 
             ## Normalization
             if(!is.null(names(x))) {
-              nlog2$normalization <- rep(names(x), sapply(ndata.all, nrow))
+              nlog2$normalization <- rep(names(x), sapply(x, nrow))
               nlog2$normalization <- factor(nlog2$normalization, levels=names(x))
             } else {
               nnames <- paste("Normalization", 1:length(x), sep="")
-              nlog2$normalization <- factor(rep(nnames, sapply(ndata.all, nrow)))
+              nlog2$normalization <- factor(rep(nnames, sapply(x, nrow)))
             }
 
-            
+
             ## need to add condition in case 'group' is NULL
             if (!is.null(group)) {
-              res <- vector("list", length(x))              
+              res <- vector("list", length(x))
               res[idx1] <- lapply(x[idx1], function(x) x$genes[[group]])
               res[idx2] <- lapply(x[idx2], function(x) pData(featureData(x))[[group]])
               nlog2$group <- unlist(res)
@@ -183,23 +183,23 @@ setMethod("densityplot", signature(x="list", data = "missing"),
               form <- as.formula(paste(" ~ `", paste(names(nlog2)[1:ncol(x[[1]])], collapse = "` + `"),
                                        "` | ", "normalization", sep=""))
             } else {
-              form <- as.formula(paste(" ~ `", paste(names(nlog2)[1:ncol(x[[1]])], collapse = "` + `"),            
+              form <- as.formula(paste(" ~ `", paste(names(nlog2)[1:ncol(x[[1]])], collapse = "` + `"),
                                        "` | ", "group + normalization", sep=""))
             }
-          
+
             xlabtext <- ifelse(channel == "G",
                                "log2 Expression of Green (Control) Channel",
                                "log2 Expression of Red (Experimental) Channel")
 
             res <- densityplot(form,
-                               data=nlog2, 
-                               plot.points=FALSE, 
+                               data=nlog2,
+                               plot.points=FALSE,
                                allow.multiple=TRUE,
                                ylab = "Estimated Density",
                                xlab = xlabtext, ... )
 
-##            if (!is.null(group)) 
-##              res <- useOuterStrips(res)              
+##            if (!is.null(group))
+##              res <- useOuterStrips(res)
 
             return(res)
 
@@ -219,8 +219,8 @@ setGeneric("levelplot", function(x, data, ...)
 ## levelplot - class 'RGList'
 ####################################################################
 
-## Use 'levelplot' in lattice with separation by type of probe 
-## Input can be a multi-dimensional array w/3rd dimension giving 
+## Use 'levelplot' in lattice with separation by type of probe
+## Input can be a multi-dimensional array w/3rd dimension giving
 ## conditioning variable (here probe type)
 
 setMethod("levelplot", signature(x="RGList", data = "missing"),
@@ -235,8 +235,8 @@ setMethod("levelplot", signature(x="RGList", data = "missing"),
             if (!is.null(subset)) {
               log2 <- log2[log2$group%in%subset,]
               log2$group <- factor(log2$group)
-            }            
-            
+            }
+
             if(!is.null(group)) {
               ngrps <- nlevels(log2$group)
               dist.array <- array(NA, dim = c(nc, nc, ngrps))
@@ -252,7 +252,7 @@ setMethod("levelplot", signature(x="RGList", data = "missing"),
                   for (k in 1:ngrps) {
                     idx <- which(log2$group == levels(log2$group)[k])
                     dist.array[i,j,k] <- median(abs(log2[idx, i] - log2[idx, j]))
-                    diag(dist.array[,,k]) <- NA ## no color for diagonals 
+                    diag(dist.array[,,k]) <- NA ## no color for diagonals
                   }
                 }
               }
@@ -260,13 +260,13 @@ setMethod("levelplot", signature(x="RGList", data = "missing"),
               for (i in 1:nc) {
                 for (j in 1:nc) {
                   dist.array[i,j] <- median(abs(log2[, i] - log2[, j]))
-                  diag(dist.array) <- NA ## no color for diagonals 
+                  diag(dist.array) <- NA ## no color for diagonals
                 }
               }
             }
 
-            res <- levelplot(dist.array, 
-                             xlab = "Median of absolute differences in log2 expression", 
+            res <- levelplot(dist.array,
+                             xlab = "Median of absolute differences in log2 expression",
                              ylab="", ... )
 
 
@@ -316,21 +316,21 @@ setMethod("levelplot", signature(x="list", data = "missing"),
               nnames <- names(x)
             }
 
-            dimnames(dist.array) <- list(cnames, cnames, nnames) 
+            dimnames(dist.array) <- list(cnames, cnames, nnames)
 
             for (i in 1:nc) {
               for (j in 1:nc) {
                 for (k in 1:ngrps) {
                   dist.array[i,j,k] <- median(abs(log2[[k]][,i] - log2[[k]][, j]), na.rm=TRUE)
-                  diag(dist.array[,,k]) <- NA ## no color for diagonals 
+                  diag(dist.array[,,k]) <- NA ## no color for diagonals
                 }
               }
             }
 
-            res <- levelplot(dist.array, 
-                             xlab = "Median of absolute differences in log2 expression", 
+            res <- levelplot(dist.array,
+                             xlab = "Median of absolute differences in log2 expression",
                              ylab="", ... )
-            
+
 
           })
 
@@ -361,7 +361,7 @@ setMethod("MADvsMedianPlot", signature(x="list"),
             idx2 <- which(classes=="NChannelSet")
             res <- vector("list", length(x))
             res[idx1] <- lapply(x[idx1], function(x) log2(RG.MA(x)[[channel]]))
-            res[idx2] <- lapply(x[idx2], function(x) assayData(x)[[channel]])  
+            res[idx2] <- lapply(x[idx2], function(x) assayData(x)[[channel]])
             ## assayData() already stored as log2 values
             ## nlog2 <- as.data.frame(do.call(rbind, res))
 
@@ -380,7 +380,7 @@ setMethod("MADvsMedianPlot", signature(x="list"),
 
             ## need to add condition in case 'group' is NULL
             if (!is.null(group)) {
-              res <- vector("list", length(x))              
+              res <- vector("list", length(x))
               res[idx1] <- lapply(x[idx1], function(x) x$genes[[group]])
               res[idx2] <- lapply(x[idx2], function(x) pData(featureData(x))[[group]])
               res.df$group <- unlist(res)
@@ -389,18 +389,18 @@ setMethod("MADvsMedianPlot", signature(x="list"),
               res.df <- res.df[res.df$group%in%subset,]
               res.df$group <- factor(res.df$group)
             }
-            
+
             if (!is.null(group)) {
               res <- xyplot(MAD ~ Medians | Method, data=res.df, groups = group,  auto.key=TRUE, ...)
             } else {
               res <- xyplot(MAD ~ Medians | Method, data=res.df, ...)
             }
             return(res)
-            
+
           })
-            
-            
-            
+
+
+
 ####################################################################
 ## MAplot - uses xyplot in lattice
 ## Note other packages have versions of 'MAplot'
@@ -434,9 +434,9 @@ setMethod("MAplot", signature(x="MAList"),
 
 setMethod("MAplot", signature(x="NChannelSet"),
           function (x,  ... ) {
-            
+
             ## FINISH HERE ..
-            x.Mvals <- (assayData(x)$R - assayData(x)$G) 
+            x.Mvals <- (assayData(x)$R - assayData(x)$G)
             x.Avals <- (assayData(x)$R + assayData(x)$G)
 
             res.df <- stack(as.data.frame(x.Avals))
