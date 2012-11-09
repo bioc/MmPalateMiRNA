@@ -1109,7 +1109,7 @@ and miRBase
 The mouse specific miRNA names are first extracted and then
 converted to the standard nomenclature using the function
 \rf{miRNames}, which  is
-included in the accompanying \proglang{R} script.
+included in the accompanying \verb|R| script.
 
 
 <<miRNamesFunc, eval=TRUE, echo=FALSE>>=
@@ -1287,7 +1287,6 @@ GO:0008277 (regulation of G-protein coupled receptor protein signaling pathway),
 and  GO:0007179 (transforming growth factor beta receptor signaling pathway). \\
 
 %% If want to try and include 'hgResult.html' ...
-%% included here as \href{hgResult.html}{\Sexpr{normalizePath("hgResult.html")}}.
 %% see also - system.file, use list.files w/pattern and append an
 %% 'file:///' at the beginning ... see
 %% http://www.bioconductor.org/help/package-vignettes/
@@ -1324,7 +1323,7 @@ if (require("org.Mm.eg.db")) {
 
 @
 
-Next, these \Sexpr(length(egIds)} Entrez Gene IDs are reverse mapped back to the set of
+Next, these \Sexpr{length(egIds)} Entrez Gene IDs are reverse mapped back to the set of
 miRNAs which putatively target these genes.
 
 <<BetaReceptorTargetMiRNAs>>=
