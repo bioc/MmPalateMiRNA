@@ -1,7 +1,7 @@
 Package: MmPalateMiRNA
 Type: Package
 Title: Murine Palate miRNA Expression Analysis
-Version: 1.17.0
+Version: 1.18.0
 Date: 2012-11-06
 Author: Guy Brock <guy.brock@louisville.edu>, Partha Mukhopadhyay
         <p0mukh01@louisville.edu>, Vasyl Pihur
