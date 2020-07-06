@@ -1,7 +1,7 @@
 Package: MmPalateMiRNA
 Type: Package
 Title: Murine Palate miRNA Expression Analysis
-Version: 1.39.0
+Version: 1.39.1
 Date: 2012-11-06
 Author: Guy Brock <guy.brock@louisville.edu>, Partha Mukhopadhyay
         <p0mukh01@louisville.edu>, Vasyl Pihur
@@ -19,8 +19,9 @@ Description: R package compendium for the analysis of murine palate
         miRNA two-color expression data.
 License: GPL-3
 LazyLoad: yes
-Collate: MmPalateMiRNA-Methods.R MmPalateMiRNA-functions.R
+Collate: MmPalateMiRNA-Methods.R MmPalateMiRNA-functions.R zzz.R
 Packaged: 2011-10-15 09:50:00 UTC; g0broc01
 biocViews: Microarray, TwoChannel, QualityControl, Preprocessing,
         DifferentialExpression, MultipleComparison, Clustering, GO,
         Pathways, ReportWriting, SequenceMatching
+PackageStatus: Deprecated
